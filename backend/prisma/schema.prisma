@@ -1,0 +1,75 @@
+// Prisma Schema for Incentive Calculation System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"  // Change to "mysql" or "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id             Int       @id @default(autoincrement())
+  employeeNumber String    @unique
+  employeeName   String
+  designation    String?   // Designation/Job title
+  jobWeight      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  // Relationships
+  // calculations will be provided at runtime; no DB table persisted for calculations
+  
+  @@map("employees")
+}
+
+model Rate {
+  id        Int      @id @default(autoincrement())
+  rateName  String   @unique  // "Old Rate" or "New Rate"
+  value     Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("rates")
+}
+
+model EmployeeDays {
+  id             Int      @id @default(autoincrement())
+  employeeNumber String
+  noOfDays       Float
+  month          DateTime // Stores the month (e.g., 2025-12-01) to differentiate records by month
+  createdAt      DateTime @default(now())
+  
+  @@unique([employeeNumber, month]) // One record per employee per month
+  @@map("employee_days")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String   // Hashed password
+  role      String   // "Admin" or "Operator"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
+
+model MonthlyReport {
+  id                  Int       @id @default(autoincrement())
+  month               DateTime  @unique // Month for this report (e.g., 2025-12-01)
+  gateMovement        Float?    // Gate Movement value
+  vesselAmount        Float?    // Vessel Amount value
+  operatorFinishedAt  DateTime? // When operator clicked Finish
+  operatorFinishedBy  String?   // Username of operator who finished
+  adminFinishedAt     DateTime? // When admin clicked Finish
+  adminFinishedBy     String?   // Username of admin who finished
+  status              String    @default("in_progress") // in_progress | operator_finished | admin_finished
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@map("monthly_reports")
+}

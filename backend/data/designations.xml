@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<designations>
+  <designation>
+    <id>1</id>
+    <name>Manager</name>
+  </designation>
+  <designation>
+    <id>2</id>
+    <name>Supervisor</name>
+  </designation>
+  <designation>
+    <id>3</id>
+    <name>Operator</name>
+  </designation>
+  <designation>
+    <id>4</id>
+    <name>Technician</name>
+  </designation>
+  <designation>
+    <id>5</id>
+    <name>Engineer</name>
+  </designation>
+  <designation>
+    <id>6</id>
+    <name>Clerk</name>
+  </designation>
+  <designation>
+    <id>7</id>
+    <name>Assistant</name>
+  </designation>
+  <designation>
+    <id>8</id>
+    <name>ComPort</name>
+  </designation>
+</designations>

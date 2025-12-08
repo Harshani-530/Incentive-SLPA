@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rates>
+  <rate>
+    <name>Old Rate</name>
+    <value>6</value>
+    <isActive>true</isActive>
+  </rate>
+  <rate>
+    <name>New Rate</name>
+    <value>2</value>
+    <isActive>true</isActive>
+  </rate>
+</rates>
