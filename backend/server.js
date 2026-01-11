@@ -9,6 +9,12 @@ import employeeDaysRoutes from './routes/employee-days.js';
 import authRoutes from './routes/auth.js';
 import changePasswordRoutes from './routes/change-password.js';
 import monthlyReportsRoutes from './routes/monthly-reports.js';
+import designationsRoutes from './routes/designations.js';
+import ratesRoutes from './routes/rates.js';
+import historyRoutes from './routes/history.js';
+import usersRoutes from './routes/users.js';
+import schedulerRoutes from './routes/scheduler.js';
+import { initializeScheduler } from './scheduler.js';
 
 dotenv.config();
 
@@ -27,6 +33,11 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/process', processRoutes);
 app.use('/api/employee-days', employeeDaysRoutes);
 app.use('/api/monthly-reports', monthlyReportsRoutes);
+app.use('/api/designations', designationsRoutes);
+app.use('/api/rates', ratesRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/scheduler', schedulerRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -48,6 +59,9 @@ process.on('SIGINT', async () => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 API available at http://localhost:${PORT}/api`);
+  
+  // Initialize scheduled tasks
+  initializeScheduler();
 });
 
 export { prisma };

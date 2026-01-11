@@ -3,6 +3,8 @@
   <rate>
     <name>Old Rate</name>
     <value>6</value>
+    <code>95</code>
+    <installments>1</installments>
     <isActive>true</isActive>
   </rate>
   <rate>

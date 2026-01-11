@@ -128,7 +128,7 @@
 }
 
 .main-content {
-  max-width: 1400px;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -191,7 +191,7 @@
 
 .form-group {
   flex: 1;
-  min-width: 200px;
+  min-width: 150px;
 }
 
 .form-group label {
@@ -220,6 +220,17 @@
 .form-input.readonly {
   background-color: #f8fafc;
   color: #64748b;
+}
+
+.form-input.autofilled {
+  background-color: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.form-input.autofilled:focus {
+  background-color: #e0f2fe;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .btn-primary, .btn-success, .btn-danger, .btn-secondary {

@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import AddEmployeePage from './pages/AddEmployeePage'
 import LoginPage from './pages/LoginPage'
+import HistoryPage from './pages/HistoryPage'
+import SuperAdminPage from './pages/SuperAdminPage'
+import OperatorManagementPage from './pages/OperatorManagementPage'
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +35,30 @@ function App() {
           element={
             <ProtectedRoute>
               <AddEmployeePage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/history" 
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/super-admin" 
+          element={
+            <ProtectedRoute>
+              <SuperAdminPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/operators" 
+          element={
+            <ProtectedRoute>
+              <OperatorManagementPage />
             </ProtectedRoute>
           } 
         />

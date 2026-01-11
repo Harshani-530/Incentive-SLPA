@@ -40,8 +40,12 @@ function LoginPage() {
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
 
-      // Redirect to home page
-      navigate('/')
+      // Redirect based on role
+      if (data.user.role === 'Super Admin') {
+        navigate('/super-admin')
+      } else {
+        navigate('/')
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.')
     } finally {
@@ -51,48 +55,52 @@ function LoginPage() {
 
   return (
     <div className="login-container">
-      <div className="login-box">
-        <div className="login-header">
-          <img src={logoImage} alt="SLPA Logo" className="login-logo" />
-          <h1>Incentive Calculation System</h1>
-          <p>Please login to continue</p>
+      <div style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%'}}>
+        <div className="login-box">
+          <div className="login-header">
+            <img src={logoImage} alt="SLPA Logo" className="login-logo" />
+            <h1>Incentive Calculation System</h1>
+            <p>Please login to continue</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="login-form">
+            {error && <div className="error-message">{error}</div>}
+
+            <div className="form-group">
+              <label htmlFor="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                className="form-input"
+                autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                className="form-input"
+              />
+            </div>
+
+            <button type="submit" className="btn-login" disabled={loading}>
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
         </div>
-
-        <form onSubmit={handleLogin} className="login-form">
-          {error && <div className="error-message">{error}</div>}
-
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
-              className="form-input"
-              autoFocus
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
-              className="form-input"
-            />
-          </div>
-
-          <button type="submit" className="btn-login" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
       </div>
       
-      <Footer />
+      <div style={{width: '100%', position: 'relative', zIndex: 2}}>
+        <Footer />
+      </div>
     </div>
   )
 }

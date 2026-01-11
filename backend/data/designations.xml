@@ -2,34 +2,38 @@
 <designations>
   <designation>
     <id>1</id>
-    <name>Manager</name>
+    <name>Act.(Dir.P/O)</name>
   </designation>
   <designation>
     <id>2</id>
-    <name>Supervisor</name>
+    <name>Act.(COM(C/O))</name>
   </designation>
   <designation>
     <id>3</id>
-    <name>Operator</name>
+    <name>Dy.COM(C/O)</name>
   </designation>
   <designation>
     <id>4</id>
-    <name>Technician</name>
+    <name>SOM</name>
   </designation>
   <designation>
     <id>5</id>
-    <name>Engineer</name>
+    <name>OM</name>
   </designation>
   <designation>
     <id>6</id>
-    <name>Clerk</name>
+    <name>CS</name>
   </designation>
   <designation>
     <id>7</id>
-    <name>Assistant</name>
+    <name>SO</name>
   </designation>
   <designation>
     <id>8</id>
-    <name>ComPort</name>
+    <name>Supdt</name>
+  </designation>
+  <designation>
+    <id>9</id>
+    <name>JM</name>
   </designation>
 </designations>

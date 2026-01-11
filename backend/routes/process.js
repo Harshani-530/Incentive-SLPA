@@ -30,12 +30,10 @@ async function getRatesFromXML() {
     return rates
   } catch (err) {
     console.error('Error reading rates from XML:', err)
-    // Fallback to database if XML fails
-    const oldRateRow = await prisma.rate.findUnique({ where: { rateName: 'Old Rate' } })
-    const newRateRow = await prisma.rate.findUnique({ where: { rateName: 'New Rate' } })
+    // Fallback to default values if XML fails
     return {
-      oldRate: parseFloat(String(oldRateRow?.value ?? '6')),
-      newRate: parseFloat(String(newRateRow?.value ?? '2'))
+      oldRate: 6,
+      newRate: 2
     }
   }
 }

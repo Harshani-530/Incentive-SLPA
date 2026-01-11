@@ -27,8 +27,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Operator finish - lock Employee Days table
-router.post('/operator-finish', authenticateToken, async (req, res) => {
+// Stage 1: Lock Employee Days - Admin clicks "Finish" button
+router.post('/lock-employee-days', authenticateToken, async (req, res) => {
   try {
     const { month } = req.body;
     const username = req.user.username;
@@ -39,19 +39,20 @@ router.post('/operator-finish', authenticateToken, async (req, res) => {
 
     const monthDate = new Date(month + '-01');
 
-    // Create or update monthly report
+    // Create or update monthly report with employee_days_locked status
     const report = await prisma.monthlyReport.upsert({
       where: { month: monthDate },
       update: {
-        operatorFinishedAt: new Date(),
-        operatorFinishedBy: username,
-        status: 'operator_finished'
+        status: 'employee_days_locked',
+        employeeDaysLockedAt: new Date(),
+        employeeDaysLockedBy: username,
+        updatedAt: new Date()
       },
       create: {
         month: monthDate,
-        operatorFinishedAt: new Date(),
-        operatorFinishedBy: username,
-        status: 'operator_finished'
+        status: 'employee_days_locked',
+        employeeDaysLockedAt: new Date(),
+        employeeDaysLockedBy: username
       }
     });
 
@@ -61,7 +62,7 @@ router.post('/operator-finish', authenticateToken, async (req, res) => {
   }
 });
 
-// Admin finish - finalize all data
+// Stage 2: Admin finish - finalize all data
 router.post('/admin-finish', authenticateToken, async (req, res) => {
   try {
     const { month, gateMovement, vesselAmount } = req.body;
@@ -73,7 +74,7 @@ router.post('/admin-finish', authenticateToken, async (req, res) => {
 
     const monthDate = new Date(month + '-01');
 
-    // Create or update monthly report
+    // Create or update monthly report with admin_finished status
     const report = await prisma.monthlyReport.upsert({
       where: { month: monthDate },
       update: {
@@ -99,10 +100,16 @@ router.post('/admin-finish', authenticateToken, async (req, res) => {
   }
 });
 
-// Override - unlock month for testing/development
-router.post('/override', authenticateToken, async (req, res) => {
+// Reprocess month - Super Admin only
+router.post('/reprocess', authenticateToken, async (req, res) => {
   try {
     const { month } = req.body;
+    const userRole = req.user.role;
+
+    // Only Super Admin can reprocess
+    if (userRole !== 'Super Admin') {
+      return res.status(403).json({ error: 'Access denied. Super Admin only.' });
+    }
 
     if (!month) {
       return res.status(400).json({ error: 'Month is required' });
@@ -110,15 +117,40 @@ router.post('/override', authenticateToken, async (req, res) => {
 
     const monthDate = new Date(month + '-01');
 
-    // Delete the monthly report to unlock
-    await prisma.monthlyReport.delete({
-      where: { month: monthDate }
-    }).catch(() => {
-      // Ignore if doesn't exist
+    // Start transaction to ensure data consistency
+    await prisma.$transaction(async (tx) => {
+      // Delete all history records for the month
+      await tx.incentiveHistory.deleteMany({
+        where: { month: monthDate }
+      });
+
+      // Reset monthly report to in_progress
+      const existingReport = await tx.monthlyReport.findUnique({
+        where: { month: monthDate }
+      });
+
+      if (existingReport) {
+        await tx.monthlyReport.update({
+          where: { month: monthDate },
+          data: {
+            status: 'in_progress',
+            gateMovement: null,
+            vesselAmount: null,
+            employeeDaysLockedAt: null,
+            employeeDaysLockedBy: null,
+            adminFinishedAt: null,
+            adminFinishedBy: null,
+            updatedAt: new Date()
+          }
+        });
+      }
     });
 
-    res.json({ message: 'Month unlocked successfully' });
+    res.json({ 
+      message: `Month ${month} has been unlocked and history data has been deleted. Employee days data is preserved.` 
+    });
   } catch (error) {
+    console.error('Error reprocessing month:', error);
     res.status(500).json({ error: error.message });
   }
 });
