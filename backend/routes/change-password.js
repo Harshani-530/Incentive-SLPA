@@ -2,6 +2,7 @@ import express from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { prisma } from '../server.js'
+import { validatePassword, isPasswordReused, savePasswordToHistory } from '../utils/passwordValidator.js'
 
 const router = express.Router()
 
@@ -35,8 +36,10 @@ router.post('/', authenticateToken, async (req, res, next) => {
       return res.status(400).json({ error: 'Current password and new password are required' })
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters long' })
+    // Validate password
+    const passwordValidation = validatePassword(newPassword, req.user.username)
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ error: passwordValidation.errors.join('. ') })
     }
 
     // Find user
@@ -55,6 +58,12 @@ router.post('/', authenticateToken, async (req, res, next) => {
       return res.status(401).json({ error: 'Current password is incorrect' })
     }
 
+    // Check if password was used before
+    const isReused = await isPasswordReused(prisma, user.id, newPassword)
+    if (isReused) {
+      return res.status(400).json({ error: 'Password was used previously. Please choose a different password.' })
+    }
+
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
@@ -63,6 +72,9 @@ router.post('/', authenticateToken, async (req, res, next) => {
       where: { id: user.id },
       data: { password: hashedPassword }
     })
+
+    // Save to password history
+    await savePasswordToHistory(prisma, user.id, hashedPassword)
 
     res.json({
       success: true,

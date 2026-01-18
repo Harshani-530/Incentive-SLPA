@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom'
 import './SuperAdminPage.css'
-import logoImage from '../assets/logo.png'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { usersAPI, superAdminAPI } from '../services/api'
-import ChangePasswordModal from '../components/ChangePasswordModal'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
+import Header from '../components/Header'
 import Footer from '../components/Footer'
 import { validateUsername } from '../utils/usernameValidator'
+import { validatePassword } from '../utils/passwordValidator'
+import { validateName, filterNameInput, formatNameToProperCase } from '../utils/nameValidator'
+import PasswordInput from '../components/PasswordInput'
 
 interface User {
   id: number;
@@ -19,8 +23,13 @@ interface User {
 
 function SuperAdminPage() {
   const navigate = useNavigate()
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [showChangePassword, setShowChangePassword] = useState(false)
+  
+  // Password reset modal state
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
+  const [resetPasswordUser, setResetPasswordUser] = useState<{ id: number; username: string } | null>(null)
+  const [newPasswordInput, setNewPasswordInput] = useState('')
+  const [confirmResetPassword, setConfirmResetPassword] = useState('')
+  const [resetPasswordError, setResetPasswordError] = useState('')
   
   // Get logged in user
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -41,7 +50,9 @@ function SuperAdminPage() {
   // Reprocess form
   const [reprocessMonth, setReprocessMonth] = useState(() => {
     const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    // Set to previous month
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1)
+    return `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
   })
   
   // Users list
@@ -51,6 +62,34 @@ function SuperAdminPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [usernameError, setUsernameError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [nameError, setNameError] = useState('')
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    danger?: boolean
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    danger: false
+  })
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    isOpen: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
+  })
 
   // Load users on mount
   useEffect(() => {
@@ -75,194 +114,212 @@ function SuperAdminPage() {
     setError('')
     setSuccess('')
     setUsernameError('')
+    setPasswordError('')
 
     if (!newUsername.trim() || !newPassword.trim()) {
-      setError('Username and password are required')
+      setToast({ isOpen: true, message: 'Username and password are required', type: 'error' })
       return
     }
 
     // Validate username
     const usernameValidation = validateUsername(newUsername.trim(), newPassword)
     if (!usernameValidation.valid) {
-      setError(usernameValidation.error || 'Invalid username')
+      setToast({ isOpen: true, message: usernameValidation.error || 'Invalid username', type: 'error' })
       return
     }
 
-    if (newName.trim() && newName.trim().length > 30) {
-      setError('Name cannot exceed 30 characters')
+    // Validate password
+    const passwordValidation = validatePassword(newPassword, newUsername.trim())
+    if (!passwordValidation.isValid) {
+      setToast({ isOpen: true, message: passwordValidation.errors.join('. '), type: 'error' })
       return
+    }
+
+    // Validate name if provided
+    if (newName.trim()) {
+      const nameValidation = validateName(newName.trim())
+      if (!nameValidation.valid) {
+        setToast({ isOpen: true, message: nameValidation.error || 'Invalid name', type: 'error' })
+        return
+      }
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters')
+      setToast({ isOpen: true, message: 'Passwords do not match', type: 'error' })
       return
     }
 
     try {
       setLoading(true)
+      const formattedName = newName.trim() ? formatNameToProperCase(newName.trim()) : undefined
+      console.log('Creating admin with:', { 
+        username: newUsername.trim(), 
+        name: formattedName,
+        hasPassword: !!newPassword 
+      })
       await usersAPI.createAdmin({
         username: newUsername.trim(),
         password: newPassword,
-        name: newName.trim() || undefined
+        name: formattedName
       })
-      setSuccess('Admin user created successfully!')
+      setToast({ isOpen: true, message: 'Admin user created successfully!', type: 'success' })
       setNewUsername('')
       setNewName('')
       setNewPassword('')
       setConfirmPassword('')
       await loadUsers()
     } catch (err: any) {
-      setError(err.message)
+      console.error('Error creating admin:', err)
+      setToast({ isOpen: true, message: err.message, type: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
   // Reprocess month
-  const handleReprocess = async () => {
+  const handleReprocess = () => {
     setError('')
     setSuccess('')
 
     if (!reprocessMonth) {
-      setError('Please select a month')
+      setToast({ isOpen: true, message: 'Please select a month', type: 'error' })
       return
     }
 
-    const confirmMsg = `Are you sure you want to reprocess ${reprocessMonth}?\n\nThis will:\n- Unlock the month for data entry\n- Delete all history records\n- Reset monthly report status\n- Preserve employee days data\n\nThis action cannot be undone!`
-    
-    if (!confirm(confirmMsg)) {
-      return
-    }
-
-    try {
-      setLoading(true)
-      const result = await superAdminAPI.reprocessMonth(reprocessMonth)
-      setSuccess(result.message)
-      
-      // Clear localStorage for this month
-      const savedDataKey = `monthData_${reprocessMonth}`
-      localStorage.removeItem(savedDataKey)
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reprocess Month?',
+      message: `Are you sure you want to reprocess ${reprocessMonth}?\n\nThis will:\n• Unlock the month for data entry\n• Delete all history records\n• Reset monthly report status\n• Preserve employee days data\n\nThis action cannot be undone!`,
+      confirmText: 'Reprocess',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          const result = await superAdminAPI.reprocessMonth(reprocessMonth)
+          setToast({ isOpen: true, message: result.message, type: 'success' })
+          
+          // Clear localStorage for this month
+          const savedDataKey = `monthData_${reprocessMonth}`
+          localStorage.removeItem(savedDataKey)
+        } catch (err: any) {
+          setToast({ isOpen: true, message: err.message, type: 'error' })
+        } finally {
+          setLoading(false)
+        }
+      }
+    })
   }
 
   // Toggle user active status
-  const handleToggleActive = async (userId: number, username: string, isActive: boolean) => {
-    if (!confirm(`Are you sure you want to ${isActive ? 'deactivate' : 'activate'} user "${username}"?`)) {
-      return
-    }
-
-    try {
-      setLoading(true)
-      await usersAPI.toggleActive(userId)
-      setSuccess(`User "${username}" has been ${isActive ? 'deactivated' : 'activated'}`)
-      await loadUsers()
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  const handleToggleActive = (userId: number, username: string, isActive: boolean) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `${isActive ? 'Deactivate' : 'Activate'} User?`,
+      message: `Are you sure you want to ${isActive ? 'deactivate' : 'activate'} user "${username}"?`,
+      confirmText: isActive ? 'Deactivate' : 'Activate',
+      danger: isActive,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          await usersAPI.toggleActive(userId)
+          setToast({ isOpen: true, message: `User "${username}" has been ${isActive ? 'deactivated' : 'activated'}`, type: 'success' })
+          await loadUsers()
+        } catch (err: any) {
+          setToast({ isOpen: true, message: err.message, type: 'error' })
+        } finally {
+          setLoading(false)
+        }
+      }
+    })
   }
 
   // Reset user password
-  const handleResetPassword = async (userId: number, username: string) => {
-    const newPass = prompt(`Enter new password for user "${username}":`)
-    if (!newPass) return
-
-    if (newPass.length < 6) {
-      setError('Password must be at least 6 characters')
+  const handleResetPassword = (userId: number, username: string) => {
+    setResetPasswordUser({ id: userId, username })
+    setNewPasswordInput('')
+    setConfirmResetPassword('')
+    setResetPasswordError('')
+    setShowPasswordReset(true)
+  }
+  
+  const handleResetPasswordChange = (value: string) => {
+    setNewPasswordInput(value)
+    
+    if (value.length === 0) {
+      setResetPasswordError('')
       return
     }
-
+    
+    const validation = validatePassword(value, resetPasswordUser?.username || '')
+    if (!validation.isValid) {
+      setResetPasswordError(validation.errors.join('. '))
+    } else {
+      setResetPasswordError('')
+    }
+  }
+  
+  const handlePasswordResetSubmit = async () => {
+    if (!resetPasswordUser) return
+    
+    if (!newPasswordInput.trim()) {
+      setToast({ isOpen: true, message: 'Please enter a new password', type: 'error' })
+      return
+    }
+    
+    const validation = validatePassword(newPasswordInput, resetPasswordUser.username)
+    if (!validation.isValid) {
+      setToast({ isOpen: true, message: validation.errors.join('. '), type: 'error' })
+      return
+    }
+    
+    if (newPasswordInput !== confirmResetPassword) {
+      setToast({ isOpen: true, message: 'Passwords do not match', type: 'error' })
+      return
+    }
+    
     try {
       setLoading(true)
-      await usersAPI.resetPassword(userId, newPass)
-      setSuccess(`Password reset successfully for user "${username}"`)
+      await usersAPI.resetPassword(resetPasswordUser.id, newPasswordInput)
+      setToast({ isOpen: true, message: `Password reset successfully for user "${resetPasswordUser.username}"`, type: 'success' })
+      setShowPasswordReset(false)
+      setResetPasswordUser(null)
+      setNewPasswordInput('')
     } catch (err: any) {
-      setError(err.message)
+      setToast({ isOpen: true, message: err.message, type: 'error' })
     } finally {
       setLoading(false)
     }
   }
   // Delete user
-  const handleDeleteUser = async (userId: number, username: string) => {
-    if (!confirm(`Are you sure you want to permanently delete user "${username}"?\n\nThis action cannot be undone!`)) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await usersAPI.deleteUser(userId);
-      setSuccess(`User "${username}" has been deleted successfully`);
-      await loadUsers();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleDeleteUser = (userId: number, username: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete User?',
+      message: `Are you sure you want to permanently delete user "${username}"?\n\nThis action cannot be undone!`,
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await usersAPI.deleteUser(userId);
+          setToast({ isOpen: true, message: `User "${username}" has been deleted successfully`, type: 'success' });
+          await loadUsers();
+        } catch (err: any) {
+          setToast({ isOpen: true, message: err.message, type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    })
   }
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="logo-section">
-          <div className="logo">
-            <img src={logoImage} alt="SLPA Logo" className="logo-image" />
-          </div>
-        </div>
-        <h1 className="app-title">Incentive Calculation System</h1>
-        <div className="user-menu">
-          <button 
-            className="user-icon" 
-            onClick={() => setShowDropdown(!showDropdown)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/>
-              <path d="M6 21C6 17.134 8.686 14 12 14C15.314 14 18 17.134 18 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-          {showDropdown && (
-            <div className="dropdown-menu">
-              <div className="dropdown-header">
-                <strong>{user.username || 'User'}</strong>
-                <span className="user-role">{user.role || ''}</span>
-              </div>
-              <button className="dropdown-item" onClick={() => navigate('/')}>
-                &#127968; Home
-              </button>
-              <button className="dropdown-item" onClick={() => {
-                setShowDropdown(false)
-                setShowChangePassword(true)
-              }}>
-                &#128274; Change Password
-              </button>
-              <button className="dropdown-item" onClick={() => {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                navigate('/login')
-              }}>
-                &#128682; Log Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header username={user.username} role={user.role} />
 
       <main className="main-content">
         <div className="page-header">
           <h2>Super Admin Control Panel</h2>
         </div>
-
-        {/* Error/Success Messages */}
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="success-message">{success}</div>}
 
         {/* Create Admin User Section */}
         <div className="form-section">
@@ -270,7 +327,7 @@ function SuperAdminPage() {
           <form onSubmit={handleCreateAdmin}>
             <div className="form-row">
               <div className="form-group">
-                <label>Username: (2-6 chars, start with lowercase letter)</label>
+                <label>Username:</label>
                 <input
                   type="text"
                   value={newUsername}
@@ -290,40 +347,74 @@ function SuperAdminPage() {
                   maxLength={6}
                 />
                 {usernameError && <small className="field-error">{usernameError}</small>}
-                <small className="field-hint">
-                  Only lowercase letters, numbers, dot (.), underscore (_). Cannot end with . or _. No consecutive dots/underscores.
+                <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  2-6 characters, lowercase start, alphanumeric with . or _
                 </small>
               </div>
               <div className="form-group">
-                <label>Name: (max 30 characters, optional)</label>
+                <label>Name:</label>
                 <input
                   type="text"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => {
+                    const filtered = filterNameInput(e.target.value)
+                    setNewName(filtered)
+                    if (filtered.trim()) {
+                      const validation = validateName(filtered.trim())
+                      setNameError(validation.valid ? '' : validation.error || '')
+                    } else {
+                      setNameError('')
+                    }
+                  }}
+                  onBlur={() => {
+                    if (newName.trim()) {
+                      setNewName(formatNameToProperCase(newName.trim()))
+                    }
+                  }}
                   placeholder="Enter full name"
-                  className="form-input"
+                  className={`form-input ${nameError ? 'input-error' : ''}`}
                   maxLength={30}
                 />
+                {nameError && <span className="field-error">{nameError}</span>}
+                <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Letters, dots (.), and single spaces only, 2-30 characters, proper case
+                </small>
               </div>
               <div className="form-group">
                 <label>Password:</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewPassword(value)
+                    // Real-time validation
+                    if (value.trim()) {
+                      const validation = validatePassword(value, newUsername.trim())
+                      setPasswordError(validation.errors.join('. '))
+                    } else {
+                      setPasswordError('')
+                    }
+                  }}
                   placeholder="Enter password"
-                  className="form-input"
+                  className={`form-input ${passwordError ? 'input-error' : ''}`}
                 />
+                {passwordError && <small className="field-error">{passwordError}</small>}
+                <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Must be 8+ chars with uppercase, lowercase, number, and special char (@#$%&*)
+                </small>
               </div>
               <div className="form-group">
                 <label>Confirm Password:</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm password"
                   className="form-input"
+                  disabled={!newPassword}
                 />
+                <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Re-enter password to confirm
+                </small>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                 <button type="submit" className="btn-primary" disabled={loading}>
@@ -338,7 +429,7 @@ function SuperAdminPage() {
         <div className="form-section">
           <h3>Reprocess Month</h3>
           <p style={{ marginBottom: '15px', color: '#dc3545', fontWeight: 'bold' }}>
-            ⚠️ Warning: This will unlock the selected month and delete history data. Employee days will be preserved.
+            <i className="fi fi-sr-exclamation" style={{ marginRight: '8px' }}></i> Warning: This will unlock the selected month and delete history data. Employee days will be preserved.
           </p>
           <div className="form-row">
             <div className="form-group">
@@ -403,14 +494,14 @@ function SuperAdminPage() {
                             onClick={() => handleToggleActive(u.id, u.username, u.isActive)}
                             title={u.isActive ? 'Deactivate' : 'Activate'}
                           >
-                            {u.isActive ? '🚫' : '✓'}
+                            {u.isActive ? <i className="fi fi-sr-cross-circle"></i> : <i className="fi fi-sr-check-circle"></i>}
                           </button>
                           <button 
                             className="btn-small btn-info"
                             onClick={() => handleResetPassword(u.id, u.username)}
                             title="Reset Password"
                           >
-                            🔑
+                            <i className="fi fi-sr-key"></i>
                           </button>
                         </div>
                       )}
@@ -425,10 +516,80 @@ function SuperAdminPage() {
 
       <Footer />
 
-      <ChangePasswordModal
-        isOpen={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-        onSuccess={() => alert('Password changed successfully!')}
+      {/* Password Reset Modal */}
+      {showPasswordReset && resetPasswordUser && (
+        <div className="modal-overlay" onClick={() => setShowPasswordReset(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Reset Password for "{resetPasswordUser.username}"</h2>
+              <button className="modal-close" onClick={() => setShowPasswordReset(false)}>×</button>
+            </div>
+            <div className="modal-form" style={{ padding: '1.5rem' }}>
+              <div className="form-group">
+                <label>New Password</label>
+                <PasswordInput
+                  value={newPasswordInput}
+                  onChange={(e) => handleResetPasswordChange(e.target.value)}
+                  placeholder="Enter new password"
+                  className="form-input"
+                  autoFocus
+                />
+                {resetPasswordError && (
+                  <small style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    {resetPasswordError}
+                  </small>
+                )}
+                {!resetPasswordError && newPasswordInput.length > 0 && (
+                  <small style={{ color: '#28a745', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    <i className="fi fi-sr-check" style={{ marginRight: '4px' }}></i> Password is valid
+                  </small>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Confirm New Password</label>
+                <PasswordInput
+                  value={confirmResetPassword}
+                  onChange={(e) => setConfirmResetPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="form-input"
+                  disabled={!newPasswordInput}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                <button 
+                  className="btn-secondary" 
+                  onClick={() => setShowPasswordReset(false)}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn-primary" 
+                  onClick={handlePasswordResetSubmit}
+                  disabled={loading || !!resetPasswordError || !newPasswordInput || newPasswordInput !== confirmResetPassword}
+                >
+                  {loading ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        danger={confirmDialog.danger}
+      />
+
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
       />
     </div>
   )

@@ -72,17 +72,14 @@ export function validateUsername(username, password = null) {
 
 /**
  * Check if username already exists (case-insensitive)
+ * Note: SQLite doesn't support mode: 'insensitive', so we fetch all users and compare manually
  */
 export async function checkUsernameExists(prisma, username, excludeId = null) {
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      username: {
-        equals: username,
-        mode: 'insensitive'
-      },
-      ...(excludeId && { id: { not: excludeId } })
-    }
+  const allUsers = await prisma.user.findMany({
+    where: excludeId ? { id: { not: excludeId } } : {},
+    select: { username: true }
   });
 
-  return existingUser !== null;
+  const usernameLower = username.toLowerCase();
+  return allUsers.some(user => user.username.toLowerCase() === usernameLower);
 }

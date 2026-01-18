@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './AddEmployeePage.css'
 import logoImage from '../assets/logo.png'
 import { employeeAPI, designationsAPI } from '../services/api'
-import ChangePasswordModal from '../components/ChangePasswordModal'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
+import Header from '../components/Header'
 import Footer from '../components/Footer'
+import { validateName, filterNameInput, formatNameToProperCase } from '../utils/nameValidator'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -32,10 +35,35 @@ function AddEmployeePage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editJobWeight, setEditJobWeight] = useState('')
   const [editDesignation, setEditDesignation] = useState('')
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [showChangePassword, setShowChangePassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [nameError, setNameError] = useState('')
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    danger?: boolean
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    danger: false
+  })
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    isOpen: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
+  })
 
   // Get logged in user
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -72,11 +100,19 @@ function AddEmployeePage() {
 
   const handleSave = async () => {
     if (employeeNumber && employeeName && jobWeight) {
+      // Validate employee name
+      const nameValidation = validateName(employeeName.trim())
+      if (!nameValidation.valid) {
+        setError(nameValidation.error || 'Invalid employee name')
+        return
+      }
+      
       try {
         setLoading(true)
+        const formattedName = formatNameToProperCase(employeeName.trim())
         await employeeAPI.create({
           employeeNumber,
-          employeeName,
+          employeeName: formattedName,
           designation,
           jobWeight
         })
@@ -88,6 +124,7 @@ function AddEmployeePage() {
         setDesignation('')
         setJobWeight('')
         setError('')
+        setToast({ isOpen: true, message: 'Employee added successfully!', type: 'success' })
       } catch (err: any) {
         setError(err.message)
       } finally {
@@ -124,6 +161,7 @@ function AddEmployeePage() {
       setEditJobWeight('')
       setEditDesignation('')
       setError('')
+      setToast({ isOpen: true, message: 'Employee updated successfully!', type: 'success' })
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -137,20 +175,27 @@ function AddEmployeePage() {
     setEditDesignation('')
   }
 
-  const handleDelete = async (index: number) => {
-    if (confirm('Are you sure you want to delete this employee?')) {
-      try {
-        setLoading(true)
-        const employee = employees[index]
-        await employeeAPI.delete(employee.id)
-        await loadEmployees()
-        setError('')
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+  const handleDelete = (index: number) => {
+    const employee = employees[index]
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Employee?',
+      message: `Are you sure you want to delete employee ${employee.employeeNumber} (${employee.employeeName})?\n\nThis action cannot be undone.`,
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          await employeeAPI.delete(employee.id)
+          await loadEmployees()
+          setToast({ isOpen: true, message: `Employee ${employee.employeeNumber} deleted successfully!`, type: 'success' })
+        } catch (err: any) {
+          setToast({ isOpen: true, message: err.message, type: 'error' })
+        } finally {
+          setLoading(false)
+        }
       }
-    }
+    })
   }
 
   // Generate PDF for Employee List
@@ -180,7 +225,7 @@ function AddEmployeePage() {
       body: tableData,
       startY: 30,
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
       styles: { fontSize: 9 },
     })
 
@@ -189,7 +234,7 @@ function AddEmployeePage() {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated by: ${user.username}`, 14, finalY)
+    doc.text(`Generated by: ${user.name || user.username}`, 14, finalY)
     doc.text(`Date: ${new Date().toLocaleString()}`, 14, finalY + 5)
 
     doc.save(`Employee_List_${new Date().toISOString().split('T')[0]}.pdf`)
@@ -197,46 +242,7 @@ function AddEmployeePage() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="logo-section">
-          <div className="logo">
-            <img src={logoImage} alt="SLPA Logo" className="logo-image" />
-          </div>
-        </div>
-        <h1 className="app-title">Incentive Calculation System</h1>
-        <div className="user-menu">
-          <button 
-            className="user-icon" 
-            onClick={() => setShowDropdown(!showDropdown)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/>
-              <path d="M6 21C6 17.134 8.686 14 12 14C15.314 14 18 17.134 18 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-          {showDropdown && (
-            <div className="dropdown-menu">
-              <div className="dropdown-header">
-                <strong>{user.username || 'User'}</strong>
-                <span className="user-role">{user.role || ''}</span>
-              </div>
-              <button className="dropdown-item" onClick={() => {
-                setShowDropdown(false)
-                setShowChangePassword(true)
-              }}>
-                🔒 Change Password
-              </button>
-              <button className="dropdown-item" onClick={() => {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                navigate('/login')
-              }}>
-                🚪 Log Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header username={user.username} role={user.role} />
 
       <main className="main-content">
         <button className="back-btn" onClick={() => navigate('/')}>
@@ -260,9 +266,12 @@ function AddEmployeePage() {
                   id="employee-number"
                   type="text"
                   value={employeeNumber}
-                  onChange={(e) => setEmployeeNumber(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '')
+                    setEmployeeNumber(value)
+                  }}
                   className="text-input"
-                  placeholder="Enter employee number"
+                  placeholder="Enter employee number (numbers only)"
                 />
               </div>
 
@@ -272,10 +281,29 @@ function AddEmployeePage() {
                   id="employee-name"
                   type="text"
                   value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
-                  className="text-input"
+                  onChange={(e) => {
+                    const filtered = filterNameInput(e.target.value)
+                    setEmployeeName(filtered)
+                    if (filtered.trim()) {
+                      const validation = validateName(filtered.trim())
+                      setNameError(validation.valid ? '' : validation.error || '')
+                    } else {
+                      setNameError('')
+                    }
+                  }}
+                  onBlur={() => {
+                    if (employeeName.trim()) {
+                      setEmployeeName(formatNameToProperCase(employeeName.trim()))
+                    }
+                  }}
+                  className={`text-input ${nameError ? 'input-error' : ''}`}
                   placeholder="Enter employee name"
+                  maxLength={50}
                 />
+                {nameError && <span className="field-error" style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px', display: 'block' }}>{nameError}</span>}
+                <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Letters, dots (.), and single spaces only, 2-30 characters, proper case
+                </small>
               </div>
 
               <div className="form-group">
@@ -379,14 +407,14 @@ function AddEmployeePage() {
                                 onClick={() => handleSaveEdit(index)}
                                 title="Save"
                               >
-                                ✓
+                                <i className="fi fi-sr-check"></i>
                               </button>
                               <button 
                                 className="cancel-action-btn"
                                 onClick={handleCancelEdit}
                                 title="Cancel"
                               >
-                                ✕
+                                <i className="fi fi-sr-cross"></i>
                               </button>
                             </>
                           ) : (
@@ -396,14 +424,14 @@ function AddEmployeePage() {
                                 onClick={() => handleEdit(index)}
                                 title="Edit Job Weight"
                               >
-                                ✎
+                                <i className="fi fi-sr-pencil"></i>
                               </button>
                               <button 
                                 className="delete-action-btn"
                                 onClick={() => handleDelete(index)}
                                 title="Delete"
                               >
-                                🗑
+                                <i className="fi fi-sr-trash"></i>
                               </button>
                             </>
                           )}
@@ -422,7 +450,7 @@ function AddEmployeePage() {
                 className="save-btn"
                 disabled={employees.length === 0}
               >
-                📄 Generate PDF (Employee List)
+                <i className="fi fi-sr-document" style={{ marginRight: '8px' }}></i> Generate PDF (Employee List)
               </button>
             </div>
           </div>
@@ -431,10 +459,20 @@ function AddEmployeePage() {
 
       <Footer />
 
-      <ChangePasswordModal
-        isOpen={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-        onSuccess={() => alert('Password changed successfully!')}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        danger={confirmDialog.danger}
+      />
+
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
       />
     </div>
   )

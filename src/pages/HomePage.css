@@ -63,6 +63,10 @@
   transition: all 0.2s;
 }
 
+.user-icon i {
+  font-size: 20px;
+}
+
 .user-icon:hover {
   border-color: #94a3b8;
   color: #475569;
@@ -125,6 +129,14 @@
 
 .dropdown-item:hover {
   background-color: #f1f5f9;
+}
+
+.dropdown-item:last-child {
+  color: #dc3545;
+}
+
+.dropdown-item:last-child:hover {
+  background-color: #fee;
 }
 
 .main-content {
@@ -317,7 +329,7 @@ button:disabled {
 
 .data-table th {
   padding: 0.75rem 1rem;
-  text-align: left;
+  text-align: center;
   font-size: 0.875rem;
   font-weight: 600;
   color: #475569;
@@ -328,6 +340,7 @@ button:disabled {
   border-bottom: 1px solid #e2e8f0;
   font-size: 0.875rem;
   color: #1e293b;
+  text-align: center;
 }
 
 .data-table tbody tr:hover {
@@ -409,37 +422,37 @@ button:disabled {
 }
 
 .edit-action-btn {
-  color: #3b82f6;
+  color: #000;
 }
 
 .edit-action-btn:hover {
-  background-color: #dbeafe;
+  background-color: #f0f0f0;
 }
 
 .delete-action-btn {
-  color: #ef4444;
+  color: #000;
 }
 
 .delete-action-btn:hover {
-  background-color: #fee2e2;
+  background-color: #f0f0f0;
 }
 
 .save-action-btn {
-  color: #22c55e;
+  color: #000;
   font-weight: bold;
 }
 
 .save-action-btn:hover {
-  background-color: #dcfce7;
+  background-color: #f0f0f0;
 }
 
 .cancel-action-btn {
-  color: #ef4444;
+  color: #000;
   font-weight: bold;
 }
 
 .cancel-action-btn:hover {
-  background-color: #fee2e2;
+  background-color: #f0f0f0;
 }
 
 .edit-input {
@@ -571,7 +584,7 @@ button:disabled {
 }
 
 .employee-table th {
-  text-align: left;
+  text-align: center;
   padding: 0.75rem 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -584,6 +597,7 @@ button:disabled {
   font-size: 0.875rem;
   color: #475569;
   border-bottom: 1px solid #e2e8f0;
+  text-align: center;
 }
 
 .employee-table tbody tr:hover {
@@ -614,37 +628,37 @@ button:disabled {
 }
 
 .edit-action-btn {
-  color: #3b82f6;
+  color: #000;
 }
 
 .edit-action-btn:hover {
-  background-color: #dbeafe;
+  background-color: #f0f0f0;
 }
 
 .delete-action-btn {
-  color: #ef4444;
+  color: #000;
 }
 
 .delete-action-btn:hover {
-  background-color: #fee2e2;
+  background-color: #f0f0f0;
 }
 
 .save-action-btn {
-  color: #22c55e;
+  color: #000;
   font-weight: bold;
 }
 
 .save-action-btn:hover {
-  background-color: #dcfce7;
+  background-color: #f0f0f0;
 }
 
 .cancel-action-btn {
-  color: #ef4444;
+  color: #000;
   font-weight: bold;
 }
 
 .cancel-action-btn:hover {
-  background-color: #fee2e2;
+  background-color: #f0f0f0;
 }
 
 .edit-input {

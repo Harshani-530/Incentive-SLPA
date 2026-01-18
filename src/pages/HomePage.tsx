@@ -6,7 +6,9 @@ import { employeeAPI, employeeDaysAPI, processAPI, monthlyReportsAPI, historyAPI
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import ChangePasswordModal from '../components/ChangePasswordModal'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Toast from '../components/Toast'
+import Header from '../components/Header'
 import Footer from '../components/Footer'
 
 interface Employee {
@@ -45,9 +47,34 @@ interface Rate {
 
 function HomePage() {
   const navigate = useNavigate()
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [showChangePassword, setShowChangePassword] = useState(false)
   const [rates, setRates] = useState<Rate[]>([])
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    danger?: boolean
+    confirmText?: string
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    danger: false
+  })
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    isOpen: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
+  })
   
   // Get logged in user
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -72,6 +99,7 @@ function HomePage() {
   const [searchEmployeeNumber, setSearchEmployeeNumber] = useState('')
   const [showEmployeeSuggestions, setShowEmployeeSuggestions] = useState(false)
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   
   // Processing inputs
   const [gateMovement, setGateMovement] = useState('')
@@ -83,7 +111,6 @@ function HomePage() {
   const [processDetails, setProcessDetails] = useState<any>(null)
   
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [employeeCache, setEmployeeCache] = useState<Employee[]>([])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editNoOfDays, setEditNoOfDays] = useState('')
@@ -100,6 +127,7 @@ function HomePage() {
   // Refs for input focus management
   const employeeNumberRef = useRef<HTMLInputElement>(null)
   const noOfDaysRef = useRef<HTMLInputElement>(null)
+  const suggestionRefs = useRef<(HTMLDivElement | null)[]>([])
 
   // Helper functions for number formatting
   const formatNumber = (value: string): string => {
@@ -211,6 +239,7 @@ function HomePage() {
     
     setEmployeeNumber(value)
     setError('')
+    setSelectedSuggestionIndex(-1)
     
     // Live search - show suggestions after 3 characters
     if (value.trim().length >= 3) {
@@ -276,8 +305,57 @@ function HomePage() {
     setJobWeight(employee.jobWeight)
     setShowEmployeeSuggestions(false)
     setFilteredEmployees([])
+    setSelectedSuggestionIndex(-1)
     // Focus on No of Days field
     setTimeout(() => noOfDaysRef.current?.focus(), 100)
+  }
+
+  // Handle keyboard navigation for suggestions
+  const handleEmployeeNumberKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showEmployeeSuggestions || filteredEmployees.length === 0) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setSelectedSuggestionIndex(prev => {
+          const newIndex = prev < filteredEmployees.length - 1 ? prev + 1 : prev
+          // Auto-scroll to the selected item
+          setTimeout(() => {
+            suggestionRefs.current[newIndex]?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest'
+            })
+          }, 0)
+          return newIndex
+        })
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setSelectedSuggestionIndex(prev => {
+          const newIndex = prev > 0 ? prev - 1 : -1
+          // Auto-scroll to the selected item
+          setTimeout(() => {
+            if (newIndex >= 0) {
+              suggestionRefs.current[newIndex]?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+              })
+            }
+          }, 0)
+          return newIndex
+        })
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredEmployees.length) {
+          handleSelectEmployee(filteredEmployees[selectedSuggestionIndex])
+        }
+        break
+      case 'Escape':
+        setShowEmployeeSuggestions(false)
+        setSelectedSuggestionIndex(-1)
+        break
+    }
   }
   
   // Handle Enter key on Employee Number field
@@ -287,7 +365,7 @@ function HomePage() {
       const value = employeeNumber.trim()
       
       if (!value) {
-        setError('Please enter an employee number')
+        setToast({ isOpen: true, message: 'Please enter an employee number', type: 'error' })
         return
       }
       
@@ -317,7 +395,7 @@ function HomePage() {
         // Focus on No of Days field
         setTimeout(() => noOfDaysRef.current?.focus(), 100)
       } else {
-        setError('Employee not found')
+        setToast({ isOpen: true, message: 'Employee not found', type: 'error' })
         setEmployeeName('')
         setDesignation('')
         setJobWeight('')
@@ -338,13 +416,13 @@ function HomePage() {
   // Save employee days
   const handleSaveEmployeeDays = async () => {
     if (!employeeNumber.trim() || !noOfDays.trim()) {
-      setError('Please enter employee number and number of days')
+      setToast({ isOpen: true, message: 'Please enter employee number and number of days', type: 'error' })
       return
     }
 
     const days = parseInt(noOfDays)
     if (isNaN(days) || days <= 0) {
-      setError('Please enter a valid number of days (whole numbers only)')
+      setToast({ isOpen: true, message: 'Please enter a valid number of days (whole numbers only)', type: 'error' })
       return
     }
 
@@ -354,20 +432,30 @@ function HomePage() {
     )
 
     if (existingEmployee) {
-      const confirmUpdate = confirm(
-        `Employee ${employeeNumber.trim()} already has ${existingEmployee.noOfDays} days recorded for this month.\n\n` +
-        `Do you want to update it to ${days} days?`
-      )
-      if (!confirmUpdate) {
-        return
-      }
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Update Employee Days?',
+        message: `Employee ${employeeNumber.trim()} already has ${existingEmployee.noOfDays} days recorded for this month.\n\nDo you want to update it to ${days} days?`,
+        confirmText: 'Update',
+        danger: false,
+        onConfirm: async () => {
+          await saveEmployeeDaysToBackend(employeeNumber.trim(), days)
+        }
+      })
+      return
     }
+
+    await saveEmployeeDaysToBackend(employeeNumber.trim(), days)
+  }
+
+  // Helper function to save employee days
+  const saveEmployeeDaysToBackend = async (empNumber: string, days: number) => {
 
     try {
       setLoading(true)
       setError('')
       await employeeDaysAPI.save({
-        employeeNumber: employeeNumber.trim(),
+        employeeNumber: empNumber,
         noOfDays: days,
         month: selectedMonth
       })
@@ -382,10 +470,13 @@ function HomePage() {
       // Reload employee days
       await loadEmployeeDays()
       
+      // Show success message
+      setToast({ isOpen: true, message: 'Employee days added successfully!', type: 'success' })
+      
       // Focus back on Employee Number field
       setTimeout(() => employeeNumberRef.current?.focus(), 100)
     } catch (err: any) {
-      setError(err.message)
+      setToast({ isOpen: true, message: err.message || 'Failed to add employee days', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -402,21 +493,28 @@ function HomePage() {
   }
   
   // Handle Finish button - lock employee days for the month
-  const handleFinishEmployeeDays = async () => {
-    if (confirm('Are you sure you want to finish? Employee days for this month will be locked and cannot be edited.')) {
-      try {
-        setLoading(true)
-        setError('')
-        await monthlyReportsAPI.lockEmployeeDays(selectedMonth)
-        setEmployeeDaysFinished(true)
+  const handleFinishEmployeeDays = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Lock Employee Days?',
+      message: 'Are you sure you want to finish?\n\nEmployee days for this month will be locked and cannot be edited.',
+      confirmText: 'Lock',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          setError('')
+          await monthlyReportsAPI.lockEmployeeDays(selectedMonth)
+          setEmployeeDaysFinished(true)
         setShowProcessCalculations(true)
         await loadMonthlyReport()
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+        } catch (err: any) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
       }
-    }
+    })
   }
 
   // Edit employee days
@@ -430,7 +528,7 @@ function HomePage() {
     const ed = employeeDaysList[index]
     const days = parseInt(editNoOfDays)
     if (isNaN(days) || days <= 0) {
-      setError('Please enter a valid number of days (whole numbers only)')
+      setToast({ isOpen: true, message: 'Please enter a valid number of days (whole numbers only)', type: 'error' })
       return
     }
     try {
@@ -443,8 +541,9 @@ function HomePage() {
       await loadEmployeeDays()
       setEditingIndex(null)
       setEditNoOfDays('')
+      setToast({ isOpen: true, message: `Employee days updated successfully for ${ed.employeeName}!`, type: 'success' })
     } catch (err: any) {
-      setError(err.message)
+      setToast({ isOpen: true, message: err.message || 'Failed to update employee days', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -457,29 +556,38 @@ function HomePage() {
   }
 
   // Delete employee days
-  const handleDeleteEmployeeDays = async (id: number) => {
-    if (confirm('Are you sure you want to delete this record?')) {
-      try {
-        setLoading(true)
-        await employeeDaysAPI.delete(id)
-        await loadEmployeeDays()
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+  const handleDeleteEmployeeDays = (id: number) => {
+    const record = employeeDaysList.find(ed => ed.id === id)
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Employee Days?',
+      message: 'Are you sure you want to delete this record?\n\nThis action cannot be undone.',
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          await employeeDaysAPI.delete(id)
+          await loadEmployeeDays()
+          setToast({ isOpen: true, message: `Employee days record deleted successfully for ${record?.employeeName || 'employee'}!`, type: 'success' })
+        } catch (err: any) {
+          setToast({ isOpen: true, message: err.message || 'Failed to delete employee days record', type: 'error' })
+        } finally {
+          setLoading(false)
+        }
       }
-    }
+    })
   }
 
   // Process calculations
   const handleProcess = async () => {
     if (!gateMovement.trim() || !vesselAmount.trim()) {
-      setError('Please enter Gate Movement and Vessel Amount')
+      setToast({ isOpen: true, message: 'Please enter Gate Movement and Vessel Amount', type: 'error' })
       return
     }
 
     if (employeeDaysList.length === 0) {
-      setError('No employee days found for the selected month')
+      setToast({ isOpen: true, message: 'No employee days found for the selected month', type: 'error' })
       return
     }
 
@@ -497,8 +605,10 @@ function HomePage() {
       setOldRateResults(result.oldRateResults || [])
       setNewRateResults(result.newRateResults || [])
       setProcessDetails(result.details)
+      
+      setToast({ isOpen: true, message: 'Process calculation completed successfully!', type: 'success' })
     } catch (err: any) {
-      setError(err.message)
+      setToast({ isOpen: true, message: err.message || 'Failed to process calculations', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -652,7 +762,7 @@ function HomePage() {
     // Title
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(`Executive Incentive Report – ${monthName} ${year}`, 14, 20)
+    doc.text(`Employee Days - ${monthName} ${year}`, 14, 20)
 
     const tableData = employeeDaysList.map((ed, index) => {
       const employee = employeeCache.find(e => e.employeeNumber === ed.employeeNumber)
@@ -676,7 +786,7 @@ function HomePage() {
       body: tableData,
       startY: 30,
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
       styles: { fontSize: 9 },
     })
 
@@ -684,10 +794,10 @@ function HomePage() {
     const finalY = (doc as any).lastAutoTable.finalY + 10
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated by: ${user.username}`, 14, finalY)
+    doc.text(`Generated by: ${user.name || user.username}`, 14, finalY)
     doc.text(`Date: ${new Date().toLocaleString()}`, 14, finalY + 5)
 
-    doc.save(`Executive_Incentive_Report_${monthName}_${year}.pdf`)
+    doc.save(`Employee_Days_${monthName}_${year}.pdf`)
   }
 
   // Generate PDF for Admin (Old/New Rate Results)
@@ -738,10 +848,10 @@ function HomePage() {
       body: tableData,
       startY: 32,
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], fontStyle: 'bold' },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
       styles: { fontSize: 9 },
       foot: [['', '', '', '', 'Total:', total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})]],
-      footStyles: { fillColor: [52, 152, 219], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 10 },
+      footStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 10 },
     })
 
     const finalY = (doc as any).lastAutoTable.finalY + 10
@@ -749,28 +859,34 @@ function HomePage() {
     // Add footer info below the table
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated by: ${user.username}`, 14, finalY)
+    doc.text(`Generated by: ${user.name || user.username}`, 14, finalY)
     doc.text(`Date: ${new Date().toLocaleString()}`, 14, finalY + 5)
 
     doc.save(`Executive_Incentive_Report_${type === 'old' ? 'Old' : 'New'}_Rate_${monthName}_${year}.pdf`)
   }
 
   // Admin Finish
-  const handleAdminFinish = async () => {
+  const handleAdminFinish = () => {
     if (!gateMovement.trim() || !vesselAmount.trim()) {
-      setError('Please enter Gate Movement and Vessel Amount before finishing')
+      setToast({ isOpen: true, message: 'Please enter Gate Movement and Vessel Amount before finishing', type: 'error' })
       return
     }
 
     if (oldRateResults.length === 0 && newRateResults.length === 0) {
-      setError('Please process calculations before finishing')
+      setToast({ isOpen: true, message: 'Please process calculations before finishing', type: 'error' })
       return
     }
 
-    if (confirm('Are you sure you want to finish? This will finalize all data for this month and lock everything.')) {
-      try {
-        setLoading(true)
-        setError('')
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Finalize Month?',
+      message: 'Are you sure you want to finish?\n\nThis will finalize all data for this month and lock everything permanently.',
+      confirmText: 'Finalize',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true)
+          setError('')
         
         // Finalize the month in database
         await monthlyReportsAPI.adminFinish({
@@ -811,13 +927,14 @@ function HomePage() {
         }
         localStorage.setItem(savedDataKey, JSON.stringify(dataToSave))
         
-        alert('Month has been finalized successfully! History has been saved. You can now generate final Excel reports.')
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+        setToast({ isOpen: true, message: 'Month finalized successfully! History saved. You can now generate Excel reports.', type: 'success' })
+        } catch (err: any) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
       }
-    }
+    })
   }
 
   // Check if month is locked
@@ -826,46 +943,7 @@ function HomePage() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="logo-section">
-          <div className="logo">
-            <img src={logoImage} alt="SLPA Logo" className="logo-image" />
-          </div>
-        </div>
-        <h1 className="app-title">Incentive Calculation System</h1>
-        <div className="user-menu">
-          <button 
-            className="user-icon" 
-            onClick={() => setShowDropdown(!showDropdown)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/>
-              <path d="M6 21C6 17.134 8.686 14 12 14C15.314 14 18 17.134 18 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-          {showDropdown && (
-            <div className="dropdown-menu">
-              <div className="dropdown-header">
-                <strong>{user.username || 'User'}</strong>
-                <span className="user-role">{user.role || ''}</span>
-              </div>
-              <button className="dropdown-item" onClick={() => {
-                setShowDropdown(false)
-                setShowChangePassword(true)
-              }}>
-                🔒 Change Password
-              </button>
-              <button className="dropdown-item" onClick={() => {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                navigate('/login')
-              }}>
-                🚪 Log Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header username={user.username} role={user.role} />
 
       <main className="main-content">
         <div className="page-header">
@@ -881,14 +959,14 @@ function HomePage() {
                   onClick={() => navigate('/history')}
                   style={{ backgroundColor: '#17a2b8', borderColor: '#17a2b8' }}
                 >
-                  📊 View History
+                  <i className="fi fi-sr-chart-histogram" style={{ marginRight: '8px' }}></i> View History
                 </button>
                 <button 
                   className="add-employee-btn" 
                   onClick={() => navigate('/operators')}
                   style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
                 >
-                  👥 Manage Operators
+                  <i className="fi fi-sr-users-alt" style={{ marginRight: '8px' }}></i> Manage Operators
                 </button>
               </>
             )}
@@ -898,7 +976,7 @@ function HomePage() {
                 onClick={() => navigate('/super-admin')}
                 style={{ backgroundColor: '#6f42c1', borderColor: '#6f42c1' }}
               >
-                ⚙️ Super Admin
+                <i className="fi fi-sr-settings" style={{ marginRight: '8px' }}></i> Super Admin
               </button>
             )}
           </div>
@@ -909,18 +987,18 @@ function HomePage() {
           <h3>Select Month</h3>
           {monthlyReport?.status === 'employee_days_locked' && (
             <div style={{ padding: '10px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px', marginBottom: '10px' }}>
-              ⚠️ This month has been locked by {monthlyReport?.employeeDaysLockedBy || 'Admin'}.
+              <i className="fi fi-sr-exclamation" style={{ marginRight: '8px' }}></i> This month has been locked by {monthlyReport?.employeeDaysLockedBy || 'Admin'}.
             </div>
           )}
           {monthlyReport?.status === 'admin_finished' && (
             <>
               {monthlyReport?.employeeDaysLockedBy && (
                 <div style={{ padding: '10px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px', marginBottom: '10px' }}>
-                  ⚠️ Employee days were locked by {monthlyReport.employeeDaysLockedBy}.
+                  <i className="fi fi-sr-exclamation" style={{ marginRight: '8px' }}></i> Employee days were locked by {monthlyReport.employeeDaysLockedBy}.
                 </div>
               )}
               <div style={{ padding: '10px', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '4px', marginBottom: '10px' }}>
-                ✓ This month has been finalized by {monthlyReport?.adminFinishedBy || 'Admin'}.
+                <i className="fi fi-sr-check-circle" style={{ marginRight: '8px' }}></i> This month has been finalized by {monthlyReport?.adminFinishedBy || 'Admin'}.
               </div>
             </>
           )}
@@ -950,8 +1028,12 @@ function HomePage() {
                 ref={employeeNumberRef}
                 type="text"
                 value={employeeNumber}
-                onChange={(e) => handleEmployeeNumberChange(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '')
+                  handleEmployeeNumberChange(value)
+                }}
                 onKeyPress={handleEmployeeNumberKeyPress}
+                onKeyDown={handleEmployeeNumberKeyDown}
                 placeholder="Enter employee number and press Enter"
                 className="form-input"
                 disabled={isEmployeeDaysLocked}
@@ -972,21 +1054,33 @@ function HomePage() {
                   boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
                   marginTop: '2px'
                 }}>
-                  {filteredEmployees.map((emp) => (
+                  {filteredEmployees.map((emp, index) => (
                     <div
                       key={emp.employeeNumber}
+                      ref={(el) => (suggestionRefs.current[index] = el)}
                       onClick={() => handleSelectEmployee(emp)}
                       style={{
                         padding: '10px',
                         cursor: 'pointer',
                         borderBottom: '1px solid #eee',
-                        transition: 'background-color 0.2s'
+                        transition: 'background-color 0.2s',
+                        backgroundColor: selectedSuggestionIndex === index ? '#007bff' : 'white',
+                        color: selectedSuggestionIndex === index ? 'white' : 'black'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                      onMouseEnter={(e) => {
+                        if (selectedSuggestionIndex !== index) {
+                          e.currentTarget.style.backgroundColor = '#f0f0f0'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (selectedSuggestionIndex !== index) {
+                          e.currentTarget.style.backgroundColor = 'white'
+                          e.currentTarget.style.color = 'black'
+                        }
+                      }}
                     >
                       <div style={{ fontWeight: 'bold' }}>{emp.employeeNumber}</div>
-                      <div style={{ fontSize: '0.9em', color: '#666' }}>
+                      <div style={{ fontSize: '0.9em', color: selectedSuggestionIndex === index ? '#fff' : '#666' }}>
                         {emp.employeeName} {emp.designation ? `(${emp.designation})` : ''}
                       </div>
                     </div>
@@ -999,10 +1093,9 @@ function HomePage() {
               <input
                 type="text"
                 value={employeeName}
-                onChange={(e) => setEmployeeName(e.target.value)}
-                placeholder="Auto-filled or enter manually"
-                className={`form-input ${!employeeName ? 'autofilled' : ''}`}
-                disabled={isEmployeeDaysLocked}
+                readOnly
+                placeholder="Auto-filled"
+                className={`form-input readonly ${!employeeName ? 'autofilled' : ''}`}
               />
             </div>
             <div className="form-group">
@@ -1010,10 +1103,9 @@ function HomePage() {
               <input
                 type="text"
                 value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                placeholder="Auto-filled or enter manually"
-                className={`form-input ${!designation ? 'autofilled' : ''}`}
-                disabled={isEmployeeDaysLocked}
+                readOnly
+                placeholder="Auto-filled"
+                className={`form-input readonly ${!designation ? 'autofilled' : ''}`}
               />
             </div>
             <div className="form-group">
@@ -1030,15 +1122,21 @@ function HomePage() {
               <label>No of Days:</label>
               <input
                 ref={noOfDaysRef}
-                type="text"
+                type="number"
                 value={noOfDays}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '')
-                  setNoOfDays(value)
+                  const value = e.target.value
+                  const numValue = parseInt(value)
+                  if (value === '' || (numValue >= 0 && numValue <= 31 && !value.includes('-') && !value.includes('.'))) {
+                    setNoOfDays(value)
+                  }
                 }}
                 onKeyPress={handleNoOfDaysKeyPress}
-                placeholder="Enter days and press Enter"
+                placeholder="Enter days (0-31) and press Enter"
                 className="form-input"
+                min="0"
+                max="31"
+                step="1"
                 disabled={isEmployeeDaysLocked}
               />
             </div>
@@ -1053,9 +1151,6 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Error Message */}
-        {error && <div className="error-message">{error}</div>}
-
         {/* Employee Days Table */}
         <div className="table-section">
           <h3>Employee Days for {selectedMonth}</h3>
@@ -1065,8 +1160,11 @@ function HomePage() {
             <input
               type="text"
               value={searchEmployeeNumber}
-              onChange={(e) => setSearchEmployeeNumber(e.target.value)}
-              placeholder="🔍 Search by Employee Number..."
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '')
+                setSearchEmployeeNumber(value)
+              }}
+              placeholder="Search by Employee Number..."
               className="form-input"
               style={{ maxWidth: '300px' }}
             />
@@ -1110,8 +1208,16 @@ function HomePage() {
                           <input
                             type="number"
                             value={editNoOfDays}
-                            onChange={(e) => setEditNoOfDays(e.target.value)}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              const numValue = parseInt(value)
+                              if (value === '' || (numValue >= 0 && numValue <= 31 && !value.includes('-') && !value.includes('.'))) {
+                                setEditNoOfDays(value)
+                              }
+                            }}
                             className="edit-input"
+                            min="0"
+                            max="31"
                             step="1"
                           />
                         ) : (
@@ -1128,14 +1234,14 @@ function HomePage() {
                                 title="Save"
                                 disabled={isEmployeeDaysLocked}
                               >
-                                ✓
+                                <i className="fi fi-sr-check"></i>
                               </button>
                               <button 
                                 className="cancel-action-btn"
                                 onClick={handleCancelEditEmployeeDays}
                                 title="Cancel"
                               >
-                                ✕
+                                <i className="fi fi-sr-cross"></i>
                               </button>
                             </>
                           ) : (
@@ -1146,7 +1252,7 @@ function HomePage() {
                                 title="Edit No of Days"
                                 disabled={isEmployeeDaysLocked}
                               >
-                                ✎
+                                <i className="fi fi-sr-pencil"></i>
                               </button>
                               <button 
                                 className="delete-action-btn"
@@ -1154,7 +1260,7 @@ function HomePage() {
                                 title="Delete"
                                 disabled={isEmployeeDaysLocked}
                               >
-                                🗑
+                                <i className="fi fi-sr-trash"></i>
                               </button>
                             </>
                           )}
@@ -1175,7 +1281,7 @@ function HomePage() {
               className="btn-secondary"
               disabled={employeeDaysList.length === 0}
             >
-              📄 Generate PDF (Employee Days)
+              <i className="fi fi-sr-document" style={{ marginRight: '8px' }}></i> Generate PDF (Employee Days)
             </button>
             
             {/* Finish Button for Admin */}
@@ -1185,7 +1291,7 @@ function HomePage() {
                 className="btn-primary"
                 style={{ minWidth: '200px' }}
               >
-                ✓ Finish (Proceed to Process Calculations)
+                <i className="fi fi-sr-check" style={{ marginRight: '8px' }}></i> Finish (Proceed to Process Calculations)
               </button>
             )}
           </div>
@@ -1371,7 +1477,7 @@ function HomePage() {
                   borderColor: '#dc3545' 
                 }}
               >
-                ✓ Finalize Month
+                <i className="fi fi-sr-check" style={{ marginRight: '8px' }}></i> Finalize Month
               </button>
             )}
           </div>
@@ -1381,7 +1487,7 @@ function HomePage() {
         {isAdminFinished && oldRateResults.length > 0 && newRateResults.length > 0 && (
           <div style={{ marginTop: '20px', textAlign: 'center', padding: '20px', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '4px' }}>
             <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#155724' }}>
-              ✓ This month has been finalized. Generate final Excel reports:
+              <i className="fi fi-sr-check-circle" style={{ marginRight: '8px' }}></i> This month has been finalized. Generate final Excel reports:
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button onClick={() => exportToExcel('old')} className="btn-success">
@@ -1400,10 +1506,21 @@ function HomePage() {
 
       <Footer />
 
-      <ChangePasswordModal
-        isOpen={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-        onSuccess={() => alert('Password changed successfully!')}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        danger={confirmDialog.danger}
+      />
+
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
       />
     </div>
   )

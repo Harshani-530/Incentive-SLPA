@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../server.js';
+import { validateName, formatNameToProperCase } from '../utils/nameValidator.js';
 
 const router = express.Router();
 
@@ -55,6 +56,12 @@ router.post('/', async (req, res) => {
   try {
     const { employeeNumber, employeeName, designation, jobWeight } = req.body;
     
+    // Validate employee name
+    const nameValidation = validateName(employeeName);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ error: nameValidation.error });
+    }
+    
     // Check if employee already exists
     const existing = await prisma.employee.findUnique({
       where: { employeeNumber }
@@ -64,8 +71,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Employee number already exists' });
     }
     
+    // Format name to proper case
+    const formattedName = formatNameToProperCase(employeeName);
+    
     const employee = await prisma.employee.create({
-      data: { employeeNumber, employeeName, designation, jobWeight }
+      data: { employeeNumber, employeeName: formattedName, designation, jobWeight }
     });
     
     res.status(201).json(employee);

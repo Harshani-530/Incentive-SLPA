@@ -48,11 +48,76 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'User account is inactive' })
     }
 
+    // Check if account is locked
+    if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+      const remainingMinutes = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000)
+      return res.status(401).json({ 
+        error: `Account is locked due to multiple failed login attempts. Please try again in ${remainingMinutes} minute(s).`,
+        isLocked: true,
+        lockedUntil: user.lockedUntil
+      })
+    }
+
+    // If lock has expired, reset failed attempts
+    if (user.lockedUntil && new Date() >= new Date(user.lockedUntil)) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null
+        }
+      })
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid username or password' })
+      // Increment failed login attempts
+      const newFailedAttempts = user.failedLoginAttempts + 1
+      const maxAttempts = 5
+      const lockDuration = 15 * 60 * 1000 // 15 minutes
+
+      if (newFailedAttempts >= maxAttempts) {
+        // Lock account
+        const lockedUntil = new Date(Date.now() + lockDuration)
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedLoginAttempts: newFailedAttempts,
+            lockedUntil: lockedUntil
+          }
+        })
+        return res.status(401).json({ 
+          error: `Account locked due to ${maxAttempts} failed login attempts. Please try again in 15 minutes.`,
+          isLocked: true,
+          lockedUntil: lockedUntil
+        })
+      } else {
+        // Update failed attempts
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedLoginAttempts: newFailedAttempts
+          }
+        })
+        const attemptsLeft = maxAttempts - newFailedAttempts
+        return res.status(401).json({ 
+          error: `Invalid username or password. ${attemptsLeft} attempt(s) remaining.`,
+          attemptsLeft: attemptsLeft
+        })
+      }
+    }
+
+    // Successful login - reset failed attempts
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null
+        }
+      })
     }
 
     // Generate JWT token
@@ -72,6 +137,7 @@ router.post('/login', async (req, res, next) => {
       user: {
         id: user.id,
         username: user.username,
+        name: user.name,
         role: user.role
       }
     })
@@ -106,6 +172,7 @@ router.post('/verify', async (req, res, next) => {
       user: {
         id: user.id,
         username: user.username,
+        name: user.name,
         role: user.role
       }
     })

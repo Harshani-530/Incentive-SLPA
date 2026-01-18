@@ -276,7 +276,7 @@ export const usersAPI = {
   },
 
   // Create Admin user
-  createAdmin: async (data: { username: string; password: string }) => {
+  createAdmin: async (data: { username: string; password: string; name?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_BASE_URL}/users/create-admin`, {
       method: 'POST',
@@ -374,7 +374,7 @@ export const operatorsAPI = {
   },
 
   // Create Operator user
-  create: async (data: { username: string; password: string }) => {
+  create: async (data: { username: string; password: string; name?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_BASE_URL}/users/create-operator`, {
       method: 'POST',

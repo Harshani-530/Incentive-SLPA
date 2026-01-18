@@ -1,37 +1,39 @@
 import { useState } from 'react'
 import './ChangePasswordModal.css'
+import PasswordInput from './PasswordInput'
+import { validatePassword } from '../utils/passwordValidator'
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onError: (message: string) => void;
 }
 
-function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswordModalProps) {
+function ChangePasswordModal({ isOpen, onClose, onSuccess, onError }: ChangePasswordModalProps) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
   const [loading, setLoading] = useState(false)
 
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Please fill all fields')
+      onError('Please fill all fields')
       return
     }
 
     if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long')
+      onError('New password must be at least 6 characters long')
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match')
+      onError('New passwords do not match')
       return
     }
 
@@ -66,7 +68,7 @@ function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswordModal
       onSuccess()
       onClose()
     } catch (err: any) {
-      setError(err.message || 'Failed to change password')
+      onError(err.message || 'Failed to change password')
     } finally {
       setLoading(false)
     }
@@ -76,7 +78,6 @@ function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswordModal
     setCurrentPassword('')
     setNewPassword('')
     setConfirmPassword('')
-    setError('')
     onClose()
   }
 
@@ -89,42 +90,56 @@ function ChangePasswordModal({ isOpen, onClose, onSuccess }: ChangePasswordModal
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
-          {error && <div className="error-message">{error}</div>}
-
           <div className="form-group">
             <label htmlFor="currentPassword">Current Password</label>
-            <input
-              id="currentPassword"
-              type="password"
+            <PasswordInput
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="Enter current password"
               className="form-input"
             />
+            <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Enter your current password
+            </small>
           </div>
 
           <div className="form-group">
             <label htmlFor="newPassword">New Password</label>
-            <input
-              id="newPassword"
-              type="password"
+            <PasswordInput
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                setNewPassword(value)
+                // Real-time validation
+                if (value.trim()) {
+                  const user = JSON.parse(localStorage.getItem('user') || '{}')
+                  const validation = validatePassword(value, user.username || '')
+                  setPasswordError(validation.errors.join('. '))
+                } else {
+                  setPasswordError('')
+                }
+              }}
               placeholder="Enter new password"
-              className="form-input"
+              className={`form-input ${passwordError ? 'input-error' : ''}`}
             />
+            {passwordError && <small className="field-error">{passwordError}</small>}
+            <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Must be 8+ chars with uppercase, lowercase, number, and special char (@#$%&*)
+            </small>
           </div>
 
           <div className="form-group">
             <label htmlFor="confirmPassword">Confirm New Password</label>
-            <input
-              id="confirmPassword"
-              type="password"
+            <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
               className="form-input"
+              disabled={!newPassword}
             />
+            <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Re-enter new password to confirm
+            </small>
           </div>
 
           <div className="modal-actions">

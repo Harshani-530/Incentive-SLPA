@@ -66,6 +66,28 @@ Before running this project, you need to install Node.js and npm:
 - **Vite** - Fast build tool and dev server
 - **ESLint** - Code linting
 
+## Default Credentials
+
+**Super Admin Account:**
+- Username: `is`
+- Password: `Admin@123`
+
+⚠️ **IMPORTANT**: Change the default password immediately after first login!
+
+## Password Requirements
+
+All passwords must meet the following criteria:
+- At least 8 characters long
+- At least one uppercase letter (A-Z)
+- At least one lowercase letter (a-z)
+- At least one number (0-9)
+- At least one special character (@, #, $, %, &, *)
+- No spaces allowed
+- Cannot be the same as username
+- Cannot reuse last 5 passwords
+
+See [PASSWORD_RULES.md](PASSWORD_RULES.md) for detailed information.
+
 ## Next Steps
 
 After installing Node.js, run `npm install` to install all dependencies, then start the development server with `npm run dev`.

@@ -62,6 +62,10 @@
   transition: all 0.2s;
 }
 
+.user-icon i {
+  font-size: 20px;
+}
+
 .user-icon:hover {
   border-color: #94a3b8;
   color: #475569;
@@ -124,6 +128,14 @@
 
 .dropdown-item:hover {
   background-color: #f1f5f9;
+}
+
+.dropdown-item:last-child {
+  color: #dc3545;
+}
+
+.dropdown-item:last-child:hover {
+  background-color: #fee;
 }
 
 .dropdown-item:not(:last-child) {
@@ -190,11 +202,6 @@
 .add-employee-btn:disabled {
   background-color: #94a3b8;
   cursor: not-allowed;
-}
-
-.user-icon svg {
-  width: 20px;
-  height: 20px;
 }
 
 .form-section {
@@ -331,7 +338,7 @@
 }
 
 .data-table th {
-  text-align: left;
+  text-align: center;
   padding: 0.75rem;
   color: #475569;
   font-weight: 600;
@@ -343,6 +350,7 @@
   padding: 0.75rem;
   border-bottom: 1px solid #e2e8f0;
   color: #1e293b;
+  text-align: center;
 }
 
 .data-table tbody tr:hover {
@@ -381,4 +389,53 @@
 .btn-success:disabled {
   background-color: #6c757d;
   cursor: not-allowed;
+}
+
+/* Employee Number Autocomplete Styles */
+.employee-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  margin-top: -1px;
+}
+
+.suggestion-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+.suggestion-item strong {
+  color: #007bff;
+  min-width: 80px;
+}
+
+.designation-badge {
+  margin-left: auto;
+  background-color: #e9ecef;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #495057;
 }

@@ -1,6 +1,68 @@
-# Incentive System - December 2025 Update
+# Incentive System - Changelog
 
-## ✅ Completed Changes
+## January 2026 - Password Security Enhancement
+
+### 🔒 Password Security Update (v2.0)
+
+#### New Password Requirements
+All passwords must now meet these strict criteria:
+- ✅ Minimum 8 characters (increased from 6)
+- ✅ At least one uppercase letter (A-Z)
+- ✅ At least one lowercase letter (a-z)
+- ✅ At least one number (0-9)
+- ✅ At least one special character (@, #, $, %, &, *)
+- ✅ No spaces allowed
+- ✅ Cannot be same as username
+- ✅ Cannot reuse last 5 passwords
+
+#### Database Changes
+- **New Table**: `password_history` - Tracks last 5 passwords per user
+- **Migration**: `20260112052402_add_password_history`
+
+#### Backend Enhancements
+- **New File**: `backend/utils/passwordValidator.js` - Comprehensive password validation
+- **Updated**: All user creation and password change endpoints enforce new rules
+- **Enhanced**: Change password endpoint now checks password history
+
+#### Frontend Improvements
+- **New Component**: `PasswordInput.tsx` - Password field with show/hide toggle (👁️)
+- **New Utility**: `src/utils/passwordValidator.ts` - Real-time password validation
+- **Enhanced Pages**:
+  - LoginPage - Password visibility toggle
+  - SuperAdminPage - Real-time validation, visual feedback
+  - OperatorManagementPage - Real-time validation, visual feedback
+  - ChangePasswordModal - Show/hide on all password fields
+
+#### User Experience
+- 👁️ Show/hide password toggle on ALL password fields
+- ⚠️ Real-time validation feedback as user types
+- 📝 Clear error messages for each requirement
+- 💡 Helper text showing password requirements
+- 🔴 Visual indicators (red border) for invalid fields
+
+#### Security Features
+- Password history tracking (prevents reuse of last 5 passwords)
+- bcrypt hashing with 10 rounds
+- Server-side validation (authoritative)
+- Client-side validation (user-friendly feedback)
+
+#### Updated Credentials
+- **Super Admin Username**: `is`
+- **Super Admin Password**: `Admin@123` (changed from `is1234`)
+- ⚠️ Change default password after first login!
+
+#### Documentation
+- **New**: `PASSWORD_RULES.md` - Detailed password requirements and examples
+- **New**: `PASSWORD_IMPLEMENTATION.md` - Complete implementation summary
+- **Updated**: `README.md` - Added password requirements section
+
+#### Testing
+- ✅ 18 comprehensive test cases (all passing)
+- Test script: `backend/test-password-validation.mjs`
+
+---
+
+## December 2025 - Initial Release
 
 ### 1. **Verified Calculation Formulas**
 - ✅ **j** = Net Amount per unit for **Old Rate** = `(b + h) / g` where `h = a * c`

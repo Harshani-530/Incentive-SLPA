@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { validateUsername, checkUsernameExists } from '../utils/usernameValidator.js';
+import { validatePassword, savePasswordToHistory } from '../utils/passwordValidator.js';
+import { validateName, formatNameToProperCase } from '../utils/nameValidator.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -87,8 +89,22 @@ router.post('/create-admin', authenticateSuperAdmin, async (req, res) => {
       return res.status(400).json({ error: usernameValidation.error });
     }
 
+    // Validate password
+    const passwordValidation = validatePassword(password, username);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ error: passwordValidation.errors.join('. ') });
+    }
+
     if (name && name.length > 30) {
       return res.status(400).json({ error: 'Name cannot exceed 30 characters' });
+    }
+
+    // Validate name if provided
+    if (name && name.trim()) {
+      const nameValidation = validateName(name.trim());
+      if (!nameValidation.valid) {
+        return res.status(400).json({ error: nameValidation.error });
+      }
     }
 
     // Check if username already exists (case-insensitive)
@@ -100,12 +116,15 @@ router.post('/create-admin', authenticateSuperAdmin, async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Format name to proper case
+    const formattedName = name && name.trim() ? formatNameToProperCase(name.trim()) : null;
+
     // Create Admin user
     const newUser = await prisma.user.create({
       data: {
         username,
         password: hashedPassword,
-        name: name || null,
+        name: formattedName,
         role: 'Admin',
         isActive: true,
       },
@@ -122,6 +141,11 @@ router.post('/create-admin', authenticateSuperAdmin, async (req, res) => {
     res.status(201).json({ message: 'Admin user created successfully', user: newUser });
   } catch (error) {
     console.error('Error creating admin user:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta
+    });
     res.status(500).json({ error: 'Failed to create admin user' });
   }
 });
@@ -184,6 +208,12 @@ router.patch('/:id/reset-password', authenticateSuperAdmin, async (req, res) => 
     // Prevent Super Admin password reset through this endpoint
     if (user.role === 'Super Admin') {
       return res.status(403).json({ error: 'Cannot reset Super Admin password through this endpoint' });
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(newPassword, user.username);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -271,8 +301,22 @@ router.post('/create-operator', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: usernameValidation.error });
     }
 
+    // Validate password
+    const passwordValidation = validatePassword(password, username);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ error: passwordValidation.errors.join('. ') });
+    }
+
     if (name && name.length > 30) {
       return res.status(400).json({ error: 'Name cannot exceed 30 characters' });
+    }
+
+    // Validate name if provided
+    if (name && name.trim()) {
+      const nameValidation = validateName(name.trim());
+      if (!nameValidation.valid) {
+        return res.status(400).json({ error: nameValidation.error });
+      }
     }
 
     // Check if username already exists (case-insensitive)
@@ -284,12 +328,15 @@ router.post('/create-operator', authenticateAdmin, async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Format name to proper case
+    const formattedName = name && name.trim() ? formatNameToProperCase(name.trim()) : null;
+
     // Create Operator user
     const newUser = await prisma.user.create({
       data: {
         username,
         password: hashedPassword,
-        name: name || null,
+        name: formattedName,
         role: 'Operator',
         isActive: true,
       },
@@ -366,6 +413,12 @@ router.patch('/operators/:id/reset-password', authenticateAdmin, async (req, res
 
     if (user.role !== 'Operator') {
       return res.status(403).json({ error: 'Can only reset Operator passwords' });
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(newPassword, user.username);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);

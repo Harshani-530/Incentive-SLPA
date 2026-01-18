@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LoginPage.css'
 import logoImage from '../assets/logo.png'
 import Footer from '../components/Footer'
+import PasswordInput from '../components/PasswordInput'
+import Toast from '../components/Toast'
 
 function LoginPage() {
   const navigate = useNavigate()
@@ -10,13 +12,60 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  
+  // Toast state
+  const [toast, setToast] = useState<{
+    isOpen: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
+  })
+  
+  // Check for session expiry
+  useEffect(() => {
+    const sessionExpired = localStorage.getItem('sessionExpired')
+    if (sessionExpired === 'true') {
+      setToast({ isOpen: true, message: 'Your session has expired due to inactivity. Please login again.', type: 'warning' })
+      localStorage.removeItem('sessionExpired')
+    }
+  }, [])
+
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.toLowerCase()
+    
+    // Apply restrictions
+    // Only allow lowercase letters, numbers, dot, underscore
+    value = value.replace(/[^a-z0-9._]/g, '')
+    
+    // Limit to 6 characters
+    if (value.length > 6) {
+      value = value.substring(0, 6)
+    }
+    
+    setUsername(value)
+  }
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value
+    
+    // Remove spaces
+    value = value.replace(/\s/g, '')
+    
+    // Only allow valid password characters (letters, numbers, special chars)
+    value = value.replace(/[^a-zA-Z0-9@#$%&*]/g, '')
+    
+    setPassword(value)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!username.trim() || !password.trim()) {
-      setError('Please enter username and password')
+      setToast({ isOpen: true, message: 'Please enter username and password', type: 'error' })
       return
     }
 
@@ -47,7 +96,7 @@ function LoginPage() {
         navigate('/')
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please try again.')
+      setToast({ isOpen: true, message: err.message || 'Login failed. Please try again.', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -64,28 +113,25 @@ function LoginPage() {
           </div>
 
           <form onSubmit={handleLogin} className="login-form">
-            {error && <div className="error-message">{error}</div>}
-
             <div className="form-group">
               <label htmlFor="username">Username</label>
               <input
                 id="username"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={handleUsernameChange}
                 placeholder="Enter username"
                 className="form-input"
                 autoFocus
+                maxLength={6}
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
+              <PasswordInput
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={handlePasswordChange}
                 placeholder="Enter password"
                 className="form-input"
               />
@@ -98,9 +144,14 @@ function LoginPage() {
         </div>
       </div>
       
-      <div style={{width: '100%', position: 'relative', zIndex: 2}}>
-        <Footer />
-      </div>
+      <Footer />
+      
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
+      />
     </div>
   )
 }
