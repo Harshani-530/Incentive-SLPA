@@ -215,7 +215,7 @@ function HomePage() {
       const data = await employeeDaysAPI.getByMonth(selectedMonth)
       setEmployeeDaysList(data)
     } catch (err: any) {
-      setError(err.message)
+      console.error('Failed to load employee days:', err)
     } finally {
       setLoading(false)
     }
@@ -238,7 +238,6 @@ function HomePage() {
     }
     
     setEmployeeNumber(value)
-    setError('')
     setSelectedSuggestionIndex(-1)
     
     // Live search - show suggestions after 3 characters
@@ -391,7 +390,6 @@ function HomePage() {
         setJobWeight(emp.jobWeight)
         setShowEmployeeSuggestions(false)
         setFilteredEmployees([])
-        setError('')
         // Focus on No of Days field
         setTimeout(() => noOfDaysRef.current?.focus(), 100)
       } else {
@@ -453,7 +451,6 @@ function HomePage() {
 
     try {
       setLoading(true)
-      setError('')
       await employeeDaysAPI.save({
         employeeNumber: empNumber,
         noOfDays: days,
@@ -489,7 +486,6 @@ function HomePage() {
     setDesignation('')
     setJobWeight('')
     setNoOfDays('')
-    setError('')
   }
   
   // Handle Finish button - lock employee days for the month
@@ -503,13 +499,12 @@ function HomePage() {
       onConfirm: async () => {
         try {
           setLoading(true)
-          setError('')
           await monthlyReportsAPI.lockEmployeeDays(selectedMonth)
           setEmployeeDaysFinished(true)
         setShowProcessCalculations(true)
         await loadMonthlyReport()
         } catch (err: any) {
-          setError(err.message)
+          setToast({ isOpen: true, message: err.message, type: 'error' })
         } finally {
           setLoading(false)
         }
@@ -593,7 +588,6 @@ function HomePage() {
 
     try {
       setLoading(true)
-      setError('')
       
       const result = await processAPI.process({
         gateMovement: parseFloat(parseFormattedNumber(gateMovement)),
@@ -886,7 +880,6 @@ function HomePage() {
       onConfirm: async () => {
         try {
           setLoading(true)
-          setError('')
         
         // Finalize the month in database
         await monthlyReportsAPI.adminFinish({
@@ -929,7 +922,7 @@ function HomePage() {
         
         setToast({ isOpen: true, message: 'Month finalized successfully! History saved. You can now generate Excel reports.', type: 'success' })
         } catch (err: any) {
-          setError(err.message)
+          setToast({ isOpen: true, message: err.message, type: 'error' })
         } finally {
           setLoading(false)
         }
